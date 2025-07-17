@@ -1,0 +1,162 @@
+ 1. Crear estructura de carpetas
+
+mkdir -p gestion_datos_reciclaje/{config,db,logica,ui,data,scripts}
+
+gestion_datos_reciclaje/
+├── app.py
+├── config/.env
+├── db/conexion.py
+├── db/schema.sql
+├── logica/mailing_export.py
+├── ui/pantalla_principal.py
+├── scripts/envio_programado.py
+
+
+
+🔹 2. Instalar dependencias globales necesarias
+Asegúrate de tener estos módulos instalados en tu sistema:
+
+pip install psycopg2 python-dotenv tk
+
+
+
+🔹 3. Configurar .env de conexión a PostgreSQL
+Crea el archivo config/.env:
+
+DB_URL=postgresql://usuario:contraseña@localhost:5432/reciclaje_db
+
+Ajusta el usuario, contraseña y nombre de DB según tu instalación local.
+
+
+
+🔹 4. Crear schema.sql con las tablas base
+Crea este archivo en db/schema.sql:
+
+CREATE TABLE empresas (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    correo TEXT UNIQUE NOT NULL,
+    telefono TEXT
+);
+
+CREATE TABLE auditorias (
+    id SERIAL PRIMARY KEY,
+    empresa_id INTEGER REFERENCES empresas(id),
+    fecha DATE NOT NULL,
+    tipo TEXT,
+    notas TEXT
+);
+
+CREATE TABLE envios_mail (
+    id SERIAL PRIMARY KEY,
+    correo TEXT,
+    fecha_envio TIMESTAMP,
+    estado TEXT,
+    error_msg TEXT
+);
+
+CREATE TABLE csv_imports_log (
+    id SERIAL PRIMARY KEY,
+    archivo_nombre TEXT,
+    fecha_importe TIMESTAMP,
+    registros_validos INTEGER,
+    errores TEXT
+);
+Luego ejecútalo con psql o en pgAdmin para dejar la base de datos lista.
+
+
+
+🔹 5. Crear db/conexion.py para conexión a PostgreSQL
+
+import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path='./config/.env')
+
+def get_connection():
+    return psycopg2.connect(os.getenv("DB_URL"))
+
+
+
+🔹 6. Crear logica/mailing_export.py (exporta correos pendientes)
+
+from datetime import datetime
+import csv
+from db.conexion import get_connection
+
+def exportar_contactos_pendientes(ruta_csv='data/contactos_pendientes.csv'):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    primer_dia_mes = datetime.today().replace(day=1).date()
+    query = """
+        SELECT correo, fecha, baja
+        FROM contactos
+        WHERE baja != 'sí' AND fecha < %s
+    """
+    cur.execute(query, (primer_dia_mes,))
+    resultados = cur.fetchall()
+
+    with open(ruta_csv, mode='w', newline='') as archivo:
+        writer = csv.writer(archivo)
+        writer.writerow(['correo', 'fecha', 'baja'])
+        writer.writerows(resultados)
+
+    print(f"✅ Exportados {len(resultados)} registros a {ruta_csv}")
+    conn.close()
+Asegúrate de tener una tabla contactos(correo, fecha, baja) si decides mantenerla aparte.
+
+
+
+🔹 7. Crear scripts/envio_programado.py
+
+from logica.mailing_export import exportar_contactos_pendientes
+
+if __name__ == '__main__':
+    exportar_contactos_pendientes()
+
+
+
+🔹 8. Crear ui/pantalla_principal.py
+
+import tkinter as tk
+from tkinter import messagebox
+from logica.mailing_export import exportar_contactos_pendientes
+
+def mostrar_menu():
+    ventana = tk.Tk()
+    ventana.title("Gestión de Datos de Reciclaje")
+    ventana.geometry("400x300")
+
+    tk.Label(ventana, text="Menú Principal", font=('Arial', 16)).pack(pady=20)
+
+    tk.Button(ventana, text="Exportar correos pendientes",
+              command=lambda: exportar_y_mostrar()).pack(pady=10)
+
+    tk.Button(ventana, text="Salir", command=ventana.quit).pack(pady=20)
+
+    ventana.mainloop()
+
+def exportar_y_mostrar():
+    exportar_contactos_pendientes()
+    messagebox.showinfo("Exportación", "Contactos pendientes exportados exitosamente.")
+
+
+
+🔹 9. Crear app.py para lanzar la interfaz
+
+from ui.pantalla_principal import mostrar_menu
+
+if __name__ == '__main__':
+    mostrar_menu()
+✅ A partir de aquí ya puedes:
+Ejecutar la app:
+
+python app.py
+Pulsar el botón para generar contactos_pendientes.csv
+
+Subirlo a tu hoja de Google Sheets
+
+Usar Google Apps Script para hacer el envío y loguear estado
+

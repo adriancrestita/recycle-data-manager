@@ -1,0 +1,12 @@
+si la fecha_envio es anterior al primer día del mes actual y el estado está en 'enviado', se actualice automáticamente a 'pendiente'.
+
+UPDATE envios_mail
+SET estado = 'pendiente'
+WHERE estado = 'enviado'
+  AND fecha_envio < date_trunc('month', CURRENT_DATE);
+
+
+
+Crear un índice sobre envios_mail(fecha_envio, estado) para mejorar el rendimiento de esta consulta.
+
+CREATE INDEX idx_envios_fecha_estado ON envios_mail(fecha_envio, estado);
